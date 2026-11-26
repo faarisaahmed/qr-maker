@@ -50,6 +50,7 @@
       <button role="tab" data-tab="effects"><i data-icon="sparkles"></i><span>Effects</span></button>
       <button role="tab" data-tab="batch"><i data-icon="layers"></i><span>Batch</span></button>
       <button role="tab" data-tab="saved"><i data-icon="folder"></i><span>My designs</span></button>
+      <button role="tab" data-tab="links" data-requires-api><i data-icon="zap"></i><span>My links</span></button>
     </nav>
 
     <!-- ============ PANEL ============ -->
@@ -81,6 +82,25 @@
               <input type="url" data-bind="data.url" placeholder="https://example.com" autocomplete="url" inputmode="url" />
             </label>
             <p class="hint">No need to type <code>https://</code> — we add it for you.</p>
+            <div class="dyn" data-requires-api>
+              <label class="switch"><input type="checkbox" data-bind="data.dynamic" /><span class="track"></span><span>Dynamic link <em class="muted">— change the destination later &amp; count scans</em></span></label>
+              <div class="dyn-box" data-show="data.dynamic">
+                <div data-show="!data.dynShort">
+                  <p class="hint">Your QR code will contain a short link that forwards to the URL above. You can change where it goes at any time — even after it’s printed.</p>
+                  <button class="btn primary" type="button" id="dynCreate"><i data-icon="zap"></i><span>Create dynamic link</span></button>
+                </div>
+                <div data-show="data.dynShort">
+                  <div class="dyn-short"><span>Short link</span><code id="dynShort"></code><button class="icon-btn" type="button" id="dynCopy" title="Copy short link" aria-label="Copy short link"><i data-icon="copy"></i></button></div>
+                  <div class="dyn-state" id="dynState"></div>
+                  <div class="dyn-actions">
+                    <button class="btn primary sm" type="button" id="dynSave" hidden><i data-icon="check"></i><span>Update live destination</span></button>
+                    <button class="btn subtle sm" type="button" id="dynNew"><i data-icon="plus"></i>New dynamic link</button>
+                    <button class="btn subtle sm" type="button" data-goto="links"><i data-icon="zap"></i>Manage links</button>
+                  </div>
+                </div>
+                <p class="hint">Scans are counted by date, country and device type — no personal data. Dynamic codes work as long as your link service is running.</p>
+              </div>
+            </div>
           </div>
 
           <div class="form" data-show="type=text">
@@ -398,6 +418,20 @@
         <div class="saved-grid" id="savedGrid"></div>
         <p class="empty" id="savedEmpty">No saved designs yet. Hit <strong>Save</strong> to keep the current one.</p>
       </div>
+      <!-- LINKS (dynamic) -->
+      <div class="pane" data-pane="links" data-requires-api>
+        <div class="pane-head">
+          <h2>My dynamic links</h2>
+          <p>Change where your codes go and see how often they’re scanned. Edit keys live in this browser only — download a backup so you never lose access.</p>
+        </div>
+        <div class="links-toolbar">
+          <button class="btn subtle sm" id="linksRefresh"><i data-icon="reset"></i>Refresh</button>
+          <button class="btn subtle sm" id="linksExport"><i data-icon="download"></i>Back up keys</button>
+          <label class="btn subtle sm"><i data-icon="upload"></i>Restore backup<input type="file" id="linksImport" accept="application/json,.json" hidden /></label>
+        </div>
+        <div class="links-list" id="linksList"></div>
+        <p class="empty" id="linksEmpty">No dynamic links yet. Turn on <strong>Dynamic link</strong> in the Content tab to create one.</p>
+      </div>
     </section>
 
     <!-- ============ PREVIEW ============ -->
@@ -430,7 +464,7 @@
           </div>
         </div>
       </div>
-      <p class="privacy"><i data-icon="check"></i>Everything runs in your browser. Codes never expire and nothing is tracked.</p>
+      <p class="privacy" id="privacyNote"><i data-icon="check"></i><span>Everything runs in your browser. Codes never expire and nothing is tracked.</span></p>
     </aside>
   </main>
 
@@ -441,6 +475,7 @@
   <script src="vendor/jsQR.js" defer></script>
   <script src="vendor/jszip.min.js" defer></script>
   <script src="js/render.js" defer></script>
+  <script src="js/config.js" defer></script>
   <script src="js/app.js" defer></script>
 </body>
 </html>

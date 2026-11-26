@@ -7,7 +7,9 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const clone = (o) => JSON.parse(JSON.stringify(o));
   const HEX = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-  const KEY_STATE = 'qrstudio:state:v1', KEY_SAVED = 'qrstudio:saved:v1', KEY_THEME = 'qrstudio:theme';
+  const KEY_STATE = 'qrstudio:state:v1', KEY_SAVED = 'qrstudio:saved:v1', KEY_THEME = 'qrstudio:theme', KEY_LINKS = 'qrstudio:links:v1';
+  // Dynamic links are only enabled when js/config.js points at a link service.
+  const API = String((window.QR_CONFIG && window.QR_CONFIG.apiBase) || '').trim().replace(/\/+$/, '');
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -25,6 +27,7 @@
       lat: '', lng: '',
       evTitle: '', evStart: '', evEnd: '', evLocation: '', evDesc: '',
       waPhone: '', waMsg: '',
+      dynamic: false, dynId: '', dynShort: '',
     },
     ec: 'auto',
     margin: 2,
@@ -101,6 +104,7 @@
     const d = st.data;
     switch (st.type) {
       case 'url': {
+        if (API && d.dynamic) return d.dynShort || '';
         let u = d.url.trim();
         if (!u) return '';
         if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
@@ -219,7 +223,8 @@
     lastText = text;
     if (!text) {
       lastBuild = null;
-      stage.innerHTML = `<div class="placeholder">${R.iconSVG('grid', 36)}<div>Fill in the details to create your QR code</div></div>`;
+      const dynPending = API && S.type === 'url' && S.data.dynamic;
+      stage.innerHTML = `<div class="placeholder">${R.iconSVG(dynPending ? 'zap' : 'grid', 36)}<div>${dynPending ? 'Click <strong>Create dynamic link</strong> to generate your code' : 'Fill in the details to create your QR code'}</div></div>`;
       $('#qrInfo').textContent = '';
       setBadge('');
       $('#warnings').innerHTML = '';
@@ -401,6 +406,7 @@
     if (S.logo.src) { if (img.getAttribute('src') !== S.logo.src) img.src = S.logo.src; img.hidden = false; }
     else { img.hidden = true; img.removeAttribute('src'); }
     $('#logoRemove').hidden = !S.logo.src;
+    if (API) syncDyn();
     $('#undoBtn').disabled = hist.i <= 0;
     $('#redoBtn').disabled = hist.i >= hist.stack.length - 1;
   }
@@ -485,6 +491,7 @@
     if (name === 'templates') renderPresets();
     if (name === 'frame') renderFrameThumbs();
     if (name === 'saved') renderSaved();
+    if (name === 'links') refreshLinks();
     try { sessionStorage.setItem('qrstudio:tab', name); } catch (e) {}
     if (window.innerWidth <= 820) {
       const tabs = $('.tabs');
@@ -787,6 +794,233 @@
     else if (k === 's') { e.preventDefault(); doDownload('png'); }
   });
 
+  /* ============================================================ dynamic links */
+  async function api(path, { method = 'GET', body, key } = {}) {
+    const headers = {};
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (key) headers.Authorization = 'Bearer ' + key;
+    let res;
+    try {
+      res = await fetch(API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch (e) {
+      throw new Error('Can’t reach the link service — check your connection');
+    }
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+  const getLinks = () => { const v = safeParse(store.get(KEY_LINKS)); return Array.isArray(v) ? v.filter((x) => x && typeof x.id === 'string' && typeof x.editKey === 'string') : []; };
+  const setLinks = (list) => store.set(KEY_LINKS, JSON.stringify(list));
+  const ownLink = (id) => getLinks().find((l) => l.id === id);
+  function patchLocal(id, fields) {
+    setLinks(getLinks().map((l) => (l.id === id ? { ...l, ...fields } : l)));
+  }
+  const normUrl = (u) => {
+    u = String(u || '').trim();
+    if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+    try { return new URL(u).toString(); } catch (e) { return u; }
+  };
+  const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function ago(isoDate) {
+    if (!isoDate) return 'never';
+    const s = (Date.now() - new Date(isoDate).getTime()) / 1000;
+    if (s < 60) return 'just now';
+    const units = [[60, 'minute'], [3600, 'hour'], [86400, 'day'], [2592000, 'month'], [31536000, 'year']];
+    let u = units[0];
+    for (const x of units) if (s >= x[0]) u = x;
+    const n = Math.floor(s / u[0]);
+    return `${n} ${u[1]}${n === 1 ? '' : 's'} ago`;
+  }
+  const scansText = (sc) => (sc ? `${sc.total.toLocaleString()} scan${sc.total === 1 ? '' : 's'} · last ${ago(sc.last)}` : '');
+  function setBusy(btn, on) { if (btn) { btn.classList.toggle('busy', on); btn.disabled = on; } }
+
+  function syncDyn() {
+    const box = $('#dynState');
+    if (!box || !S.data.dynShort) return;
+    $('#dynShort').textContent = S.data.dynShort.replace(/^https?:\/\//, '');
+    const link = ownLink(S.data.dynId);
+    const save = $('#dynSave');
+    box.className = 'dyn-state';
+    if (!link) {
+      save.hidden = true;
+      box.classList.add('warn');
+      box.textContent = 'This browser doesn’t have the edit key for this link. Restore your backup in My links to edit it.';
+      return;
+    }
+    if (link.disabled) {
+      save.hidden = true;
+      box.classList.add('warn');
+      box.textContent = 'This link was disabled: ' + (link.disabledReason || 'policy violation');
+      return;
+    }
+    const changed = normUrl(S.data.url) !== link.target;
+    save.hidden = !changed;
+    box.innerHTML = changed
+      ? `Live destination is still <strong>${escHtml(link.target)}</strong> — click <em>Update</em> to switch it to the URL above.`
+      : `Live → <strong>${escHtml(link.target)}</strong>${link.scans ? '<br>' + escHtml(scansText(link.scans)) : ''}`;
+  }
+
+  async function dynCreate() {
+    const target = S.data.url.trim();
+    if (!target) return toast('Enter the destination URL first', true);
+    const btn = $('#dynCreate');
+    setBusy(btn, true);
+    try {
+      const r = await api('/api/links', { method: 'POST', body: { target } });
+      setLinks([{ id: r.id, shortUrl: r.shortUrl, editKey: r.editKey, target: r.target, createdAt: r.createdAt, scans: r.scans }, ...getLinks()]);
+      S.data.dynId = r.id;
+      S.data.dynShort = r.shortUrl;
+      S.data.url = r.target;
+      commitNow();
+      afterChange();
+      toast('Dynamic link created — back up your keys in My links');
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      setBusy(btn, false);
+    }
+  }
+  async function updateTarget(id, target, btn) {
+    const link = ownLink(id);
+    if (!link) return toast('No edit key for this link in this browser', true);
+    setBusy(btn, true);
+    try {
+      const r = await api('/api/links/' + id, { method: 'PATCH', key: link.editKey, body: { target } });
+      patchLocal(id, { target: r.target, scans: { ...(link.scans || {}), ...r.scans, daily: (link.scans && link.scans.daily) || [] } });
+      if (S.data.dynId === id) S.data.url = r.target;
+      afterChange();
+      toast('Destination updated — the printed code now goes there');
+      return r;
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      setBusy(btn, false);
+    }
+  }
+
+  function spark(daily) {
+    const days = [], map = new Map((daily || []).map((d) => [d.day, d.n]));
+    for (let i = 29; i >= 0; i--) days.push(map.get(new Date(Date.now() - i * 864e5).toISOString().slice(0, 10)) || 0);
+    const max = Math.max(1, ...days), w = 5, gap = 0;
+    const bars = days.map((n, i) => {
+      const h = n ? Math.max(2, (n / max) * 28) : 1;
+      return `<rect x="${i * w + gap}" y="${30 - h}" width="${w - 1}" height="${h}" rx="1" opacity="${n ? 1 : 0.25}"/>`;
+    }).join('');
+    return `<svg class="spark" viewBox="0 0 150 30" fill="currentColor" role="img" aria-label="Scans over the last 30 days">${bars}</svg>`;
+  }
+  function renderLinks() {
+    const list = getLinks();
+    $('#linksEmpty').hidden = list.length > 0;
+    $('#linksList').innerHTML = list.map((l) => {
+      const status = l.gone ? ['fail', 'Deleted'] : l.disabled ? ['fail', 'Disabled'] : ['ok', 'Live'];
+      return `<div class="link-card${l.gone ? ' gone' : ''}" data-id="${escHtml(l.id)}">
+        <div class="lc-top"><a href="${escHtml(l.shortUrl)}+" target="_blank" rel="noopener" title="Preview where this goes">${escHtml(l.shortUrl.replace(/^https?:\/\//, ''))}</a>
+          <span class="badge ${status[0]}">${status[1]}</span>
+          <button class="icon-btn" data-copy title="Copy short link" aria-label="Copy short link">${R.iconSVG('copy', 16)}</button></div>
+        ${l.disabled ? `<div class="dyn-state warn">${escHtml(l.disabledReason || 'Disabled')}</div>` : ''}
+        <div class="lc-edit"><input value="${escHtml(l.target)}" aria-label="Destination URL" ${l.gone || l.disabled ? 'disabled' : ''} /><button class="btn primary sm" data-save ${l.gone || l.disabled ? 'disabled' : ''}>Save</button></div>
+        <div class="lc-stats"><span><strong>${(l.scans ? l.scans.total : 0).toLocaleString()}</strong> scans · last ${escHtml(ago(l.scans && l.scans.last))} · created ${escHtml(new Date(l.createdAt || Date.now()).toLocaleDateString())}</span>${spark(l.scans && l.scans.daily)}</div>
+        <div class="lc-actions"><button class="btn subtle sm" data-open ${l.gone ? 'disabled' : ''}>${R.iconSVG('grid', 16)}Open in editor</button><button class="btn subtle sm danger" data-del>${R.iconSVG('trash', 16)}${l.gone ? 'Remove' : 'Delete'}</button></div>
+      </div>`;
+    }).join('');
+  }
+  let refreshing = null;
+  async function refreshLinks() {
+    renderLinks();
+    const list = getLinks();
+    if (!list.length || refreshing) return refreshing;
+    refreshing = (async () => {
+      try {
+        const r = await api('/api/links/lookup', { method: 'POST', body: { items: list.map((l) => ({ id: l.id, key: l.editKey })) } });
+        const byId = new Map(r.links.map((x) => [x.id, x]));
+        setLinks(getLinks().map((l) => {
+          const x = byId.get(l.id);
+          if (x) return { ...l, target: x.target, shortUrl: x.shortUrl, disabled: x.disabled, disabledReason: x.disabledReason, scans: x.scans, gone: false };
+          return r.missing.includes(l.id) ? { ...l, gone: true } : l;
+        }));
+        renderLinks();
+        syncDyn();
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        refreshing = null;
+      }
+    })();
+    return refreshing;
+  }
+
+  function initDynamic() {
+    if (!API) {
+      $$('[data-requires-api]').forEach((el) => el.remove());
+      return;
+    }
+    $('#privacyNote span').textContent = 'Static codes never expire and aren’t tracked. Dynamic links only count scans (date, country, device).';
+    $('#dynCreate').addEventListener('click', dynCreate);
+    $('#dynSave').addEventListener('click', (e) => updateTarget(S.data.dynId, S.data.url, e.currentTarget));
+    $('#dynNew').addEventListener('click', () => { S.data.dynId = ''; S.data.dynShort = ''; commitNow(); afterChange(); });
+    $('#dynCopy').addEventListener('click', () => navigator.clipboard.writeText(S.data.dynShort).then(() => toast('Short link copied')));
+    document.addEventListener('click', (e) => { const g = e.target.closest('[data-goto]'); if (g) showTab(g.dataset.goto); });
+
+    $('#linksList').addEventListener('click', async (e) => {
+      const card = e.target.closest('.link-card');
+      if (!card) return;
+      const id = card.dataset.id, link = ownLink(id);
+      if (!link) return;
+      if (e.target.closest('[data-copy]')) {
+        navigator.clipboard.writeText(link.shortUrl).then(() => toast('Short link copied'));
+      } else if (e.target.closest('[data-save]')) {
+        const r = await updateTarget(id, $('input', card).value, e.target.closest('[data-save]'));
+        if (r) renderLinks();
+      } else if (e.target.closest('[data-open]')) {
+        S.type = 'url';
+        Object.assign(S.data, { dynamic: true, dynId: id, dynShort: link.shortUrl, url: link.target });
+        commitNow(); afterChange();
+        showTab('content');
+      } else if (e.target.closest('[data-del]')) {
+        if (!link.gone && !confirm('Delete this link? Any printed QR codes using it will stop working. This can’t be undone.')) return;
+        try {
+          if (!link.gone) await api('/api/links/' + id, { method: 'DELETE', key: link.editKey });
+          setLinks(getLinks().filter((l) => l.id !== id));
+          if (S.data.dynId === id) { S.data.dynId = ''; S.data.dynShort = ''; commitNow(); afterChange(); }
+          renderLinks();
+          toast('Link deleted');
+        } catch (err) { toast(err.message, true); }
+      }
+    });
+    $('#linksList').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.matches('.lc-edit input')) $('[data-save]', e.target.closest('.link-card')).click();
+    });
+    $('#linksRefresh').addEventListener('click', () => refreshLinks());
+    $('#linksExport').addEventListener('click', () => {
+      const links = getLinks().map(({ id, shortUrl, editKey, target, createdAt }) => ({ id, shortUrl, editKey, target, createdAt }));
+      if (!links.length) return toast('No links to back up yet', true);
+      download(new Blob([JSON.stringify({ app: 'qr-studio', version: 1, exportedAt: new Date().toISOString(), links }, null, 2)], { type: 'application/json' }), 'qr-studio-link-keys.json');
+      toast('Backup downloaded — keep it somewhere safe');
+    });
+    $('#linksImport').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        const incoming = (Array.isArray(data.links) ? data.links : []).filter((l) => l && typeof l.id === 'string' && typeof l.editKey === 'string' && typeof l.shortUrl === 'string');
+        if (!incoming.length) throw new Error();
+        const have = new Map(getLinks().map((l) => [l.id, l]));
+        let added = 0;
+        for (const l of incoming) if (!have.has(l.id)) { have.set(l.id, { id: l.id, shortUrl: l.shortUrl, editKey: l.editKey, target: String(l.target || ''), createdAt: l.createdAt }); added++; }
+        setLinks([...have.values()]);
+        toast(`Restored ${added} link${added === 1 ? '' : 's'}`);
+        refreshLinks();
+      } catch (err) {
+        toast('That file isn’t a QR Studio key backup', true);
+      }
+    });
+    // keep the content-tab status fresh
+    if (S.data.dynamic && S.data.dynId && ownLink(S.data.dynId)) refreshLinks();
+  }
+
   /* ---- toast */
   function toast(msg, err) {
     const t = document.createElement('div');
@@ -821,6 +1055,7 @@
     $('#textChips').innerHTML = FRAME_TEXTS.map((t) => `<button type="button">${t}</button>`).join('');
     $('#textChips').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) update('frame.text', b.textContent); });
     renderFrameThumbs();
+    initDynamic();
 
     // shared link
     const m = location.hash.match(/^#d=([\w-]+)/);

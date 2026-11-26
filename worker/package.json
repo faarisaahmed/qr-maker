@@ -1,0 +1,19 @@
+{
+  "name": "qr-studio-links",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:local": "node scripts/dev-server.mjs",
+    "dev": "wrangler dev",
+    "test": "node --test test/*.test.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "wrangler": "^4.0.0"
+  }
+}

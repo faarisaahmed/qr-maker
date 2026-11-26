@@ -19,6 +19,10 @@ A free, private QR code designer that runs entirely in your browser — no sign-
 - **Batch mode** — one code per line, downloaded as a ZIP
 - Undo/redo, share links, saved designs, auto-save, dark mode, mobile-friendly
 
+## Dynamic (editable) QR codes — ready, not switched on
+
+`worker/` contains a complete link service (Cloudflare Worker + Neon Postgres). It lets people change where a printed code points, and see scan counts. It's off by default. The site only shows the **Dynamic link** toggle and the **My links** tab once `apiBase` is set in [`js/config.js`](js/config.js). See [`worker/README.md`](worker/README.md) for setup.
+
 ## Run locally
 
 It's a static site with no build step:
