@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>QR Studio — Free custom QR code generator</title>
+  <meta name="description" content="Design beautiful QR codes for links, text, Wi-Fi, contacts and more. Custom shapes, colors, gradients, logos, frames and effects. Free, private, runs in your browser." />
+  <meta name="theme-color" content="#6366f1" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    // apply theme before paint to avoid a flash
+    (function () {
+      try {
+        var t = localStorage.getItem('qrstudio:theme');
+        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="QR Studio home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M14 14h3v3h-3zM18 18h3v3h-3zM18 14h3M14 18v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </span>
+      <span class="brand-name">QR Studio</span>
+    </a>
+    <div class="top-actions">
+      <button class="icon-btn" id="undoBtn" title="Undo (Ctrl/⌘+Z)" aria-label="Undo"><i data-icon="undo"></i></button>
+      <button class="icon-btn" id="redoBtn" title="Redo (Ctrl/⌘+Shift+Z)" aria-label="Redo"><i data-icon="redo"></i></button>
+      <span class="divider"></span>
+      <button class="btn ghost" id="surpriseBtn" title="Random style"><i data-icon="shuffle"></i><span>Surprise me</span></button>
+      <button class="btn ghost" id="shareBtn" title="Copy a link to this design"><i data-icon="share"></i><span>Share</span></button>
+      <button class="icon-btn" id="resetBtn" title="Reset everything" aria-label="Reset"><i data-icon="reset"></i></button>
+      <button class="icon-btn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode"><i data-icon="moon"></i></button>
+    </div>
+  </header>
+
+  <main class="app">
+    <!-- ============ NAV ============ -->
+    <nav class="tabs" role="tablist" aria-label="Editor sections">
+      <button role="tab" data-tab="content" class="active"><i data-icon="link"></i><span>Content</span></button>
+      <button role="tab" data-tab="templates"><i data-icon="grid"></i><span>Templates</span></button>
+      <button role="tab" data-tab="shapes"><i data-icon="shapes"></i><span>Shapes</span></button>
+      <button role="tab" data-tab="colors"><i data-icon="palette"></i><span>Colors</span></button>
+      <button role="tab" data-tab="logo"><i data-icon="image"></i><span>Logo</span></button>
+      <button role="tab" data-tab="frame"><i data-icon="frame"></i><span>Frame</span></button>
+      <button role="tab" data-tab="effects"><i data-icon="sparkles"></i><span>Effects</span></button>
+      <button role="tab" data-tab="batch"><i data-icon="layers"></i><span>Batch</span></button>
+      <button role="tab" data-tab="saved"><i data-icon="folder"></i><span>My designs</span></button>
+    </nav>
+
+    <!-- ============ PANEL ============ -->
+    <section class="panel">
+
+      <!-- CONTENT -->
+      <div class="pane active" data-pane="content">
+        <div class="pane-head">
+          <h2>What should your QR code do?</h2>
+          <p>Pick a type and fill in the details. The preview updates as you type.</p>
+        </div>
+
+        <div class="type-grid" data-choice="type">
+          <button data-value="url"><i data-icon="link"></i>Website</button>
+          <button data-value="text"><i data-icon="text"></i>Text</button>
+          <button data-value="wifi"><i data-icon="wifi"></i>Wi‑Fi</button>
+          <button data-value="email"><i data-icon="mail"></i>Email</button>
+          <button data-value="phone"><i data-icon="phone"></i>Phone</button>
+          <button data-value="sms"><i data-icon="message"></i>SMS</button>
+          <button data-value="vcard"><i data-icon="user"></i>Contact</button>
+          <button data-value="location"><i data-icon="pin"></i>Location</button>
+          <button data-value="event"><i data-icon="calendar"></i>Event</button>
+          <button data-value="whatsapp"><i data-icon="chat"></i>WhatsApp</button>
+        </div>
+
+        <div class="card">
+          <div class="form" data-show="type=url">
+            <label class="field"><span>Website URL</span>
+              <input type="url" data-bind="data.url" placeholder="https://example.com" autocomplete="url" inputmode="url" />
+            </label>
+            <p class="hint">No need to type <code>https://</code> — we add it for you.</p>
+          </div>
+
+          <div class="form" data-show="type=text">
+            <label class="field"><span>Text</span>
+              <textarea data-bind="data.text" rows="5" placeholder="Type any text, a note, a coupon code…"></textarea>
+            </label>
+          </div>
+
+          <div class="form" data-show="type=wifi">
+            <div class="row">
+              <label class="field"><span>Network name (SSID)</span><input data-bind="data.wifiSsid" placeholder="MyHomeWiFi" /></label>
+              <label class="field" data-show="data.wifiEnc!=nopass"><span>Password</span><input data-bind="data.wifiPass" placeholder="••••••••" /></label>
+            </div>
+            <div class="row">
+              <div class="field"><span>Security</span>
+                <div class="seg" data-choice="data.wifiEnc">
+                  <button data-value="WPA">WPA/WPA2/WPA3</button><button data-value="WEP">WEP</button><button data-value="nopass">None</button>
+                </div>
+              </div>
+              <label class="switch"><input type="checkbox" data-bind="data.wifiHidden" /><span class="track"></span>Hidden network</label>
+            </div>
+            <p class="hint">Phones join the network instantly when they scan it.</p>
+          </div>
+
+          <div class="form" data-show="type=email">
+            <label class="field"><span>Email address</span><input type="email" data-bind="data.email" placeholder="hello@example.com" /></label>
+            <label class="field"><span>Subject</span><input data-bind="data.emailSubject" placeholder="Optional" /></label>
+            <label class="field"><span>Message</span><textarea data-bind="data.emailBody" rows="3" placeholder="Optional"></textarea></label>
+          </div>
+
+          <div class="form" data-show="type=phone">
+            <label class="field"><span>Phone number</span><input type="tel" data-bind="data.phone" placeholder="+1 555 123 4567" /></label>
+            <p class="hint">Include your country code so it works everywhere.</p>
+          </div>
+
+          <div class="form" data-show="type=sms">
+            <label class="field"><span>Phone number</span><input type="tel" data-bind="data.smsPhone" placeholder="+1 555 123 4567" /></label>
+            <label class="field"><span>Message</span><textarea data-bind="data.smsMsg" rows="3" placeholder="Pre-filled message (optional)"></textarea></label>
+          </div>
+
+          <div class="form" data-show="type=vcard">
+            <div class="row">
+              <label class="field"><span>First name</span><input data-bind="data.vFirst" autocomplete="given-name" /></label>
+              <label class="field"><span>Last name</span><input data-bind="data.vLast" autocomplete="family-name" /></label>
+            </div>
+            <div class="row">
+              <label class="field"><span>Company</span><input data-bind="data.vOrg" /></label>
+              <label class="field"><span>Job title</span><input data-bind="data.vTitle" /></label>
+            </div>
+            <div class="row">
+              <label class="field"><span>Phone</span><input type="tel" data-bind="data.vPhone" /></label>
+              <label class="field"><span>Email</span><input type="email" data-bind="data.vEmail" /></label>
+            </div>
+            <label class="field"><span>Website</span><input type="url" data-bind="data.vUrl" /></label>
+            <label class="field"><span>Address</span><input data-bind="data.vAddress" placeholder="Street, City, Country" /></label>
+          </div>
+
+          <div class="form" data-show="type=location">
+            <div class="row">
+              <label class="field"><span>Latitude</span><input data-bind="data.lat" inputmode="decimal" placeholder="40.7128" /></label>
+              <label class="field"><span>Longitude</span><input data-bind="data.lng" inputmode="decimal" placeholder="-74.0060" /></label>
+            </div>
+            <button class="btn subtle" id="geoBtn" type="button"><i data-icon="crosshair"></i>Use my current location</button>
+            <p class="hint">Opens the spot in the scanner's maps app.</p>
+          </div>
+
+          <div class="form" data-show="type=event">
+            <label class="field"><span>Event title</span><input data-bind="data.evTitle" placeholder="Launch party" /></label>
+            <div class="row">
+              <label class="field"><span>Starts</span><input type="datetime-local" data-bind="data.evStart" /></label>
+              <label class="field"><span>Ends</span><input type="datetime-local" data-bind="data.evEnd" /></label>
+            </div>
+            <label class="field"><span>Location</span><input data-bind="data.evLocation" placeholder="Optional" /></label>
+            <label class="field"><span>Description</span><textarea data-bind="data.evDesc" rows="2" placeholder="Optional"></textarea></label>
+          </div>
+
+          <div class="form" data-show="type=whatsapp">
+            <label class="field"><span>WhatsApp number</span><input type="tel" data-bind="data.waPhone" placeholder="+1 555 123 4567" /></label>
+            <label class="field"><span>Message</span><textarea data-bind="data.waMsg" rows="3" placeholder="Pre-filled message (optional)"></textarea></label>
+          </div>
+
+          <div class="meter" id="dataMeter"><div class="meter-bar"><span></span></div><small></small></div>
+        </div>
+
+        <details class="card advanced">
+          <summary>Advanced settings</summary>
+          <div class="field"><span>Error correction <em class="muted">— higher survives damage &amp; logos</em></span>
+            <div class="seg" data-choice="ec">
+              <button data-value="auto">Auto</button><button data-value="L">L · 7%</button><button data-value="M">M · 15%</button><button data-value="Q">Q · 25%</button><button data-value="H">H · 30%</button>
+            </div>
+          </div>
+          <label class="field range"><span>Quiet zone (margin) <output data-out="margin" data-fmt="mod"></output></span>
+            <input type="range" min="0" max="8" step="1" data-bind="margin" />
+          </label>
+        </details>
+      </div>
+
+      <!-- TEMPLATES -->
+      <div class="pane" data-pane="templates">
+        <div class="pane-head">
+          <h2>Start from a template</h2>
+          <p>One click applies a complete style. Your content and logo stay the same.</p>
+        </div>
+        <div class="preset-grid" id="presetGrid"></div>
+        <button class="btn primary wide" id="surpriseBtn2"><i data-icon="shuffle"></i>Surprise me with a random style</button>
+      </div>
+
+      <!-- SHAPES -->
+      <div class="pane" data-pane="shapes">
+        <div class="pane-head">
+          <h2>Shapes</h2>
+          <p>Mix and match the pattern and the three corner “eyes”.</p>
+        </div>
+        <div class="card">
+          <h3>Pattern</h3>
+          <div class="shape-grid" data-choice="body" data-thumbs="body"></div>
+        </div>
+        <div class="card">
+          <h3>Corner frame</h3>
+          <div class="shape-grid" data-choice="eyeOuter" data-thumbs="outer"></div>
+        </div>
+        <div class="card">
+          <h3>Corner dot</h3>
+          <div class="shape-grid" data-choice="eyeInner" data-thumbs="inner"></div>
+        </div>
+      </div>
+
+      <!-- COLORS -->
+      <div class="pane" data-pane="colors">
+        <div class="pane-head">
+          <h2>Colors</h2>
+          <p>Keep the code darker than the background for the best scanning.</p>
+        </div>
+        <div class="card">
+          <h3>Quick palettes</h3>
+          <div class="palette-row" id="paletteRow"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Code color</h3>
+            <button class="btn subtle sm" id="swapBtn" type="button" title="Swap code and background colors"><i data-icon="swap"></i>Swap</button>
+          </div>
+          <div class="seg" data-choice="fg.mode">
+            <button data-value="solid">Solid</button><button data-value="linear">Linear gradient</button><button data-value="radial">Radial gradient</button>
+          </div>
+          <div class="row">
+            <div class="field"><span data-show="fg.mode=solid">Color</span><span data-show="fg.mode!=solid">Start</span><div class="color"><input type="color" data-bind="fg.c1" /><input class="hex" data-bind="fg.c1" maxlength="9" spellcheck="false" /></div></div>
+            <div class="field" data-show="fg.mode!=solid"><span>End</span><div class="color"><input type="color" data-bind="fg.c2" /><input class="hex" data-bind="fg.c2" maxlength="9" spellcheck="false" /></div></div>
+          </div>
+          <label class="field range" data-show="fg.mode=linear"><span>Angle <output data-out="fg.angle" data-fmt="deg"></output></span>
+            <input type="range" min="0" max="360" step="5" data-bind="fg.angle" />
+          </label>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Corner colors</h3>
+            <label class="switch"><input type="checkbox" data-bind="eyes.custom" /><span class="track"></span>Custom</label>
+          </div>
+          <div class="row" data-show="eyes.custom">
+            <div class="field"><span>Frame</span><div class="color"><input type="color" data-bind="eyes.outer" /><input class="hex" data-bind="eyes.outer" maxlength="9" spellcheck="false" /></div></div>
+            <div class="field"><span>Dot</span><div class="color"><input type="color" data-bind="eyes.inner" /><input class="hex" data-bind="eyes.inner" maxlength="9" spellcheck="false" /></div></div>
+          </div>
+          <p class="hint" data-show="!eyes.custom">Corners use the code color. Turn on “Custom” to give them their own.</p>
+        </div>
+
+        <div class="card">
+          <h3>Background</h3>
+          <div class="seg" data-choice="bg.mode">
+            <button data-value="solid">Solid</button><button data-value="linear">Linear</button><button data-value="radial">Radial</button><button data-value="transparent">Transparent</button>
+          </div>
+          <div class="row" data-show="bg.mode!=transparent">
+            <div class="field"><span data-show="bg.mode=solid">Color</span><span data-show="bg.mode!=solid">Start</span><div class="color"><input type="color" data-bind="bg.c1" /><input class="hex" data-bind="bg.c1" maxlength="9" spellcheck="false" /></div></div>
+            <div class="field" data-show="bg.mode=linear|radial"><span>End</span><div class="color"><input type="color" data-bind="bg.c2" /><input class="hex" data-bind="bg.c2" maxlength="9" spellcheck="false" /></div></div>
+          </div>
+          <label class="field range" data-show="bg.mode=linear"><span>Angle <output data-out="bg.angle" data-fmt="deg"></output></span>
+            <input type="range" min="0" max="360" step="5" data-bind="bg.angle" />
+          </label>
+        </div>
+      </div>
+
+      <!-- LOGO -->
+      <div class="pane" data-pane="logo">
+        <div class="pane-head">
+          <h2>Logo</h2>
+          <p>Put your brand or an icon in the middle. Error correction is raised automatically.</p>
+        </div>
+        <div class="seg big" data-choice="logo.kind">
+          <button data-value="none">No logo</button><button data-value="icon">Icon</button><button data-value="image">Upload image</button>
+        </div>
+
+        <div class="card" data-show="logo.kind=icon">
+          <h3>Choose an icon</h3>
+          <div class="icon-grid" data-choice="logo.icon" id="iconGrid"></div>
+          <div class="field"><span>Icon color</span><div class="color"><input type="color" data-bind="logo.iconColor" /><input class="hex" data-bind="logo.iconColor" maxlength="9" spellcheck="false" /></div></div>
+        </div>
+
+        <div class="card" data-show="logo.kind=image">
+          <label class="dropzone" id="dropzone">
+            <input type="file" accept="image/*" id="logoFile" hidden />
+            <img id="logoPreview" alt="" hidden />
+            <span class="dz-empty"><i data-icon="upload"></i><strong>Click to upload</strong> or drag &amp; drop<br /><small>PNG, JPG, SVG or WebP — you can also paste an image</small></span>
+          </label>
+          <button class="btn subtle sm" id="logoRemove" type="button" hidden><i data-icon="trash"></i>Remove image</button>
+        </div>
+
+        <div class="card" data-show="logo.kind!=none">
+          <h3>Logo settings</h3>
+          <label class="field range"><span>Size <output data-out="logo.size" data-fmt="pct"></output></span>
+            <input type="range" min="0.1" max="0.35" step="0.01" data-bind="logo.size" />
+          </label>
+          <label class="field range"><span>Padding <output data-out="logo.padding" data-fmt="dec"></output></span>
+            <input type="range" min="0" max="3" step="0.1" data-bind="logo.padding" />
+          </label>
+          <div class="row">
+            <div class="field"><span>Backdrop</span>
+              <div class="seg" data-choice="logo.shape"><button data-value="circle">Circle</button><button data-value="square">Square</button><button data-value="none">None</button></div>
+            </div>
+            <div class="field" data-show="logo.shape!=none"><span>Backdrop color</span><div class="color"><input type="color" data-bind="logo.bgColor" /><input class="hex" data-bind="logo.bgColor" maxlength="9" spellcheck="false" /></div></div>
+          </div>
+          <label class="switch"><input type="checkbox" data-bind="logo.clear" /><span class="track"></span>Remove dots behind the logo</label>
+        </div>
+      </div>
+
+      <!-- FRAME -->
+      <div class="pane" data-pane="frame">
+        <div class="pane-head">
+          <h2>Frame</h2>
+          <p>A call-to-action frame can double the number of scans.</p>
+        </div>
+        <div class="frame-grid" data-choice="frame.style" id="frameGrid"></div>
+        <div class="card" data-show="frame.style!=none">
+          <label class="field"><span>Frame text</span><input data-bind="frame.text" maxlength="40" placeholder="SCAN ME" /></label>
+          <div class="chips" id="textChips"></div>
+          <div class="row">
+            <div class="field"><span>Frame color</span><div class="color"><input type="color" data-bind="frame.color" /><input class="hex" data-bind="frame.color" maxlength="9" spellcheck="false" /></div></div>
+            <div class="field" data-show="frame.style!=corners"><span>Text color</span><div class="color"><input type="color" data-bind="frame.textColor" /><input class="hex" data-bind="frame.textColor" maxlength="9" spellcheck="false" /></div></div>
+          </div>
+          <div class="field"><span>Font</span>
+            <div class="seg" data-choice="frame.font">
+              <button data-value="sans" style="font-weight:800">Bold</button><button data-value="rounded" style="font-family:'Arial Rounded MT Bold',system-ui">Rounded</button><button data-value="serif" style="font-family:Georgia,serif">Serif</button><button data-value="mono" style="font-family:Menlo,monospace">Mono</button><button data-value="script" style="font-family:'Brush Script MT',cursive;font-size:1.1em">Script</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EFFECTS -->
+      <div class="pane" data-pane="effects">
+        <div class="pane-head">
+          <h2>Effects</h2>
+          <p>Add depth and polish. Everything exports to SVG too.</p>
+        </div>
+        <div class="card">
+          <label class="field range"><span>Rounded corners <output data-out="fx.radius" data-fmt="int"></output></span>
+            <input type="range" min="0" max="200" step="4" data-bind="fx.radius" />
+          </label>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Drop shadow</h3><label class="switch"><input type="checkbox" data-bind="fx.shadow" /><span class="track"></span></label></div>
+          <div data-show="fx.shadow">
+            <div class="field"><span>Shadow color</span><div class="color"><input type="color" data-bind="fx.shadowColor" /><input class="hex" data-bind="fx.shadowColor" maxlength="9" spellcheck="false" /></div></div>
+            <label class="field range"><span>Blur <output data-out="fx.shadowBlur" data-fmt="int"></output></span><input type="range" min="0" max="80" step="1" data-bind="fx.shadowBlur" /></label>
+            <label class="field range"><span>Offset <output data-out="fx.shadowY" data-fmt="int"></output></span><input type="range" min="-60" max="60" step="1" data-bind="fx.shadowY" /></label>
+            <label class="field range"><span>Opacity <output data-out="fx.shadowOpacity" data-fmt="pct"></output></span><input type="range" min="0" max="1" step="0.05" data-bind="fx.shadowOpacity" /></label>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Neon glow</h3><label class="switch"><input type="checkbox" data-bind="fx.glow" /><span class="track"></span></label></div>
+          <div data-show="fx.glow">
+            <div class="field"><span>Glow color</span><div class="color"><input type="color" data-bind="fx.glowColor" /><input class="hex" data-bind="fx.glowColor" maxlength="9" spellcheck="false" /></div></div>
+            <label class="field range"><span>Intensity <output data-out="fx.glowSize" data-fmt="int"></output></span><input type="range" min="1" max="10" step="1" data-bind="fx.glowSize" /></label>
+            <p class="hint">Looks best on a dark background.</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>3D depth</h3><label class="switch"><input type="checkbox" data-bind="fx.depth" /><span class="track"></span></label></div>
+          <div data-show="fx.depth">
+            <div class="field"><span>Depth color</span><div class="color"><input type="color" data-bind="fx.depthColor" /><input class="hex" data-bind="fx.depthColor" maxlength="9" spellcheck="false" /></div></div>
+            <label class="field range"><span>Depth <output data-out="fx.depthSize" data-fmt="int"></output></span><input type="range" min="1" max="10" step="1" data-bind="fx.depthSize" /></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- BATCH -->
+      <div class="pane" data-pane="batch">
+        <div class="pane-head">
+          <h2>Batch generate</h2>
+          <p>Paste one link or text per line. Every code uses your current design and downloads together as a ZIP.</p>
+        </div>
+        <div class="card">
+          <label class="field"><span>Contents — one per line</span>
+            <textarea id="batchInput" rows="9" placeholder="https://example.com/table-1&#10;https://example.com/table-2&#10;https://example.com/table-3"></textarea>
+          </label>
+          <p class="hint">Tip: name a file by writing <code>name | content</code> on a line.</p>
+          <div class="row">
+            <div class="field"><span>Format</span>
+              <div class="seg" id="batchFormat"><button data-value="png" class="active">PNG</button><button data-value="svg">SVG</button><button data-value="jpeg">JPG</button></div>
+            </div>
+            <label class="switch"><input type="checkbox" id="batchHttps" checked /><span class="track"></span>Add https:// to bare domains</label>
+          </div>
+          <button class="btn primary wide" id="batchBtn"><i data-icon="download"></i><span>Download ZIP</span></button>
+          <div class="progress" id="batchProgress" hidden><span></span></div>
+        </div>
+      </div>
+
+      <!-- SAVED -->
+      <div class="pane" data-pane="saved">
+        <div class="pane-head">
+          <h2>My designs</h2>
+          <p>Saved in this browser only — nothing is uploaded anywhere.</p>
+        </div>
+        <div class="card save-row">
+          <input id="saveName" placeholder="Name this design" maxlength="60" />
+          <button class="btn primary" id="saveBtn"><i data-icon="save"></i>Save</button>
+        </div>
+        <div class="saved-grid" id="savedGrid"></div>
+        <p class="empty" id="savedEmpty">No saved designs yet. Hit <strong>Save</strong> to keep the current one.</p>
+      </div>
+    </section>
+
+    <!-- ============ PREVIEW ============ -->
+    <aside class="preview">
+      <div class="preview-card">
+        <div class="stage" id="stage">
+          <div id="qr" class="qr" aria-live="polite"></div>
+        </div>
+        <div class="status">
+          <span class="badge" id="scanBadge"></span>
+          <span class="info" id="qrInfo"></span>
+        </div>
+        <ul class="warnings" id="warnings"></ul>
+
+        <div class="export">
+          <label class="field range"><span>Image width <output data-out="out.size" data-fmt="px"></output></span>
+            <input type="range" min="256" max="4096" step="64" data-bind="out.size" />
+          </label>
+          <label class="field"><span>File name</span><input data-bind="out.name" placeholder="qr-code" spellcheck="false" /></label>
+          <div class="dl-grid">
+            <button class="btn primary" data-dl="png"><i data-icon="download"></i>PNG</button>
+            <button class="btn" data-dl="svg">SVG</button>
+            <button class="btn" data-dl="jpeg">JPG</button>
+            <button class="btn" data-dl="webp">WebP</button>
+          </div>
+          <div class="sub-actions">
+            <button class="btn subtle sm" id="copyBtn"><i data-icon="copy"></i>Copy</button>
+            <button class="btn subtle sm" id="printBtn"><i data-icon="printer"></i>Print</button>
+            <button class="btn subtle sm" id="quickSaveBtn"><i data-icon="save"></i>Save</button>
+          </div>
+        </div>
+      </div>
+      <p class="privacy"><i data-icon="check"></i>Everything runs in your browser. Codes never expire and nothing is tracked.</p>
+    </aside>
+  </main>
+
+  <div class="drop-overlay" id="dropOverlay"><div><i data-icon="image"></i>Drop image to use as logo</div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script src="vendor/qrcode.js" defer></script>
+  <script src="vendor/jsQR.js" defer></script>
+  <script src="vendor/jszip.min.js" defer></script>
+  <script src="js/render.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
